@@ -229,6 +229,18 @@ const genEcdhSharedKey = async ({
   )[0];
 };
 
+const uint8ArrayToBn = (arr: Uint8Array) => {
+  var hex: string[] = [];
+
+  arr.forEach((i) => {
+    var h = i.toString(16);
+    if (h.length % 2) { h = '0' + h; }
+    hex.push(h);
+  });
+
+  return BigInt('0x' + hex.join(''));
+}
+
 /*
  * Encrypts a plaintext using a given key.
  * @return The ciphertext.
@@ -239,6 +251,19 @@ const encrypt = async (
 ): Promise<Ciphertext> => {
   const mimc7 = await buildMimc7();
   // [assignment] generate the IV, use Mimc7 to hash the shared key with the IV, then encrypt the plain text
+  const iv = mimc7.multiHash(plaintext, BigInt(0))
+
+  const ciphertext: Ciphertext = {
+      iv: uint8ArrayToBn(iv),
+      data: plaintext.map((e: bigint, i: number): bigint => {
+          return e + uint8ArrayToBn(mimc7.hash(
+              sharedKey,
+              uint8ArrayToBn(iv) + BigInt(i),
+          ))
+      }),
+  }
+  
+  return ciphertext
 };
 
 /*
@@ -249,7 +274,16 @@ const decrypt = async (
   ciphertext: Ciphertext,
   sharedKey: EcdhSharedKey,
 ): Promise<Plaintext> => {
+  const mimc7 = await buildMimc7();
+
   // [assignment] use Mimc7 to hash the shared key with the IV, then descrypt the ciphertext
+  const plaintext: Plaintext = ciphertext.data.map(
+    (e: bigint, i: number): bigint => {
+        return BigInt(e) - uint8ArrayToBn(mimc7.hash(sharedKey, ciphertext.iv + BigInt(i)))
+    }
+  )
+
+  return plaintext
 };
 
 export {
